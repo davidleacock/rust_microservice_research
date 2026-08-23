@@ -16,10 +16,10 @@ async fn main() {
         .route("/", get(|| async { "server running..." }))
         .route("/task", post(create_task))
         .route("/tasks", get(tasks))
+        .route("/task/{task_id}", get(get_task))
         .route("/task/{task_id}/priority", post(set_priority))
         .route("/task/{task_id}/status", post(set_status))
         .route("/task/{task_id}/project_id", post(set_project_id))
-        .route("/task/{task_id}", get(get_task))
         .with_state(state);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
