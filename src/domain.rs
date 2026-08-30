@@ -1,5 +1,6 @@
 use Status::*;
 use serde::{Deserialize, Serialize};
+use std::fmt::{Display, Formatter};
 use uuid::Uuid;
 
 #[derive(Copy, Clone, Eq, Hash, PartialEq, Deserialize, Serialize)]
@@ -13,7 +14,7 @@ pub enum StatusError {
     InvalidTransition { message: String },
 }
 
-#[derive(Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize, Copy, Clone)]
 pub enum Status {
     Todo,
     InProgress,
@@ -22,6 +23,16 @@ pub enum Status {
 }
 
 impl Status {
+    pub fn new(status: &str) -> Status {
+        match status {
+            "Todo" => Todo,
+            "InProgress" => InProgress,
+            "Done" => Done,
+            "Cancelled" => Cancelled,
+            _ => Todo,
+        }
+    }
+
     pub fn transition_to(&self, status: Status) -> Result<Status, StatusError> {
         match self {
             Todo => {
@@ -44,11 +55,43 @@ impl Status {
     }
 }
 
-#[derive(Deserialize, Serialize, Clone)]
+impl Display for Status {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Todo => write!(f, "Todo"),
+            InProgress => write!(f, "InProgress"),
+            Done => write!(f, "Done"),
+            Cancelled => write!(f, "Cancelled"),
+        }
+    }
+}
+
+#[derive(Deserialize, Serialize, Copy, Clone)]
 pub enum Priority {
     Low,
     Medium,
     High,
+}
+
+impl Priority {
+    pub fn new(priority: &str) -> Priority {
+        match priority {
+            "High" => Priority::High,
+            "Medium" => Priority::Medium,
+            "Low" => Priority::Low,
+            _ => Priority::Low,
+        }
+    }
+}
+
+impl Display for Priority {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Priority::Low => write!(f, "Low"),
+            Priority::Medium => write!(f, "Medium"),
+            Priority::High => write!(f, "High"),
+        }
+    }
 }
 
 #[derive(Deserialize, Serialize, Clone)]
@@ -86,12 +129,36 @@ impl Task {
         })
     }
 
+    pub(crate) fn from_dto(
+        task_id: Uuid,
+        title: String,
+        priority: String,
+        status: String,
+        project_id: Option<Uuid>,
+    ) -> Task {
+        Task {
+            task_id: TaskId(task_id),
+            title,
+            priority: Priority::new(&priority),
+            status: Status::new(&status),
+            project_id: project_id.map(ProjectId),
+        }
+    }
+
     pub fn title(&self) -> &str {
         &self.title
     }
 
     pub fn task_id(&self) -> TaskId {
         self.task_id
+    }
+
+    pub fn priority(&self) -> Priority {
+        self.priority
+    }
+
+    pub fn status(&self) -> Status {
+        self.status
     }
 
     pub fn project_id(&self) -> Option<ProjectId> {

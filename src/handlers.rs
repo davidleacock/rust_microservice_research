@@ -1,13 +1,14 @@
 use crate::domain::{Priority, ProjectId, Status, Task, TaskError, TaskId};
+use crate::repository::TaskRepository;
 use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use serde::Deserialize;
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
+#[derive(Clone)]
 pub struct AppState {
-    pub tasks: Mutex<HashMap<TaskId, Task>>,
+    pub repository: Arc<dyn TaskRepository>,
 }
 
 #[derive(Deserialize)]
@@ -32,19 +33,18 @@ pub struct SetProjectId {
 }
 
 pub async fn create_task(
-    state: State<Arc<AppState>>,
+    state: State<AppState>,
     Json(body): Json<CreateTask>,
 ) -> Result<Json<TaskId>, StatusCode> {
     match Task::new(body.title, body.priority) {
         Ok(task) => {
-            let id = task.task_id();
-            let mut tasks = state
-                .tasks
-                .lock()
+            let result = state
+                .repository
+                .create_task(task)
+                .await
                 .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-            tasks.insert(task.task_id(), task);
-            Ok(Json(id))
+            Ok(Json(result))
         }
         Err(error) => match error {
             TaskError::TitleMissing => Err(StatusCode::BAD_REQUEST),
@@ -53,87 +53,78 @@ pub async fn create_task(
     }
 }
 
-pub async fn tasks(state: State<Arc<AppState>>) -> Result<Json<Vec<Task>>, StatusCode> {
-    let tasks = state
-        .tasks
-        .lock()
+pub async fn tasks(state: State<AppState>) -> Result<Json<Vec<Task>>, StatusCode> {
+    let tasks: Vec<Task> = state
+        .repository
+        .get_tasks()
+        .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    let tasks: Vec<Task> = tasks.values().cloned().collect();
     Ok(Json(tasks))
 }
 
 pub async fn get_task(
-    state: State<Arc<AppState>>,
+    state: State<AppState>,
     Path(task_id): Path<TaskId>,
 ) -> Result<Json<Task>, StatusCode> {
-    let tasks = state
-        .tasks
-        .lock()
+    let result = state
+        .repository
+        .get_task(task_id)
+        .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    match tasks.get(&task_id) {
+    match result {
         None => Err(StatusCode::NOT_FOUND),
-        Some(task) => Ok(Json(task.clone())),
+        Some(task) => Ok(Json(task)),
     }
 }
 
 pub async fn set_priority(
-    state: State<Arc<AppState>>,
+    state: State<AppState>,
     Path(task_id): Path<TaskId>,
     Json(body): Json<SetPriority>,
 ) -> Result<Json<Task>, StatusCode> {
-    let mut tasks = state
-        .tasks
-        .lock()
+    let result = state
+        .repository
+        .set_priority(task_id, body.priority)
+        .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    match tasks.get_mut(&task_id) {
+    match result {
         None => Err(StatusCode::NOT_FOUND),
-        Some(task) => {
-            task.set_priority(body.priority);
-            Ok(Json(task.clone()))
-        }
+        Some(task) => Ok(Json(task)),
     }
 }
 
 pub async fn set_status(
-    state: State<Arc<AppState>>,
+    state: State<AppState>,
     Path(task_id): Path<TaskId>,
     Json(body): Json<SetStatus>,
 ) -> Result<Json<Task>, StatusCode> {
-    let mut tasks = state
-        .tasks
-        .lock()
+    let result = state
+        .repository
+        .set_status(task_id, body.status)
+        .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    match tasks.get_mut(&task_id) {
+    match result {
         None => Err(StatusCode::NOT_FOUND),
-        Some(task) => match task.set_status(body.status) {
-            Ok(_) => Ok(Json(task.clone())),
-            Err(message) => match message {
-                TaskError::InvalidStatusChange { .. } => Err(StatusCode::CONFLICT),
-                _ => Err(StatusCode::NOT_FOUND),
-            },
-        },
+        Some(task) => Ok(Json(task)),
     }
 }
 
 pub async fn set_project_id(
-    state: State<Arc<AppState>>,
+    state: State<AppState>,
     Path(task_id): Path<TaskId>,
     Json(body): Json<SetProjectId>,
-) -> Result<(), StatusCode> {
-    let mut tasks = state
-        .tasks
-        .lock()
+) -> Result<Json<Task>, StatusCode> {
+    let result = state
+        .repository
+        .set_project_id(task_id, body.project_id)
+        .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    match tasks.get_mut(&task_id) {
+    match result {
         None => Err(StatusCode::NOT_FOUND),
-        Some(task) => {
-            task.set_project_id(body.project_id);
-            Ok(())
-        }
+        Some(task) => Ok(Json(task)),
     }
 }

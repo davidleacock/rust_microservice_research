@@ -153,3 +153,19 @@ noted above (still tracked, not forgotten — just not this phase's focus).
   can't be checked with a literal in a `matches!`/`match` pattern — needs a
   `matches!(.., if message == "...")` guard or an explicit `match`/`assert_eq!`
   instead.
+- 2026-08-29 — Settled the Phase 3 concurrency/state shape: `TaskRepository: Send +
+  Sync` (required because `Arc<T>` is only `Send + Sync` when `T` is, which
+  transitively determines whether `AppState` — and therefore each handler's
+  `Future` — is `Send`, which axum's `Handler` bound requires for tokio's
+  multithreaded runtime to move in-flight futures between worker threads);
+  `InMemoryTaskRepository` wraps `Mutex<HashMap<TaskId, Task>>` internally rather
+  than `AppState` wrapping the repository in its own outer lock (interior
+  mutability belongs inside each adapter, not imposed on every adapter by the
+  caller — see also the earlier call not to double-wrap with an outer `Mutex`);
+  `AppState` holds one field, `repository: Arc<dyn TaskRepository>`, derives
+  `Clone`, and is passed to `with_state` directly (no redundant outer
+  `Arc<AppState>`) since cloning `AppState` already reduces to one `Arc` refcount
+  bump. `#[async_trait]` used to make `TaskRepository`'s `async fn` methods
+  dyn-compatible (bare `async fn` in a trait isn't, since each impl's generated
+  future is a distinct, differently-sized anonymous type — incompatible with a
+  vtable, which needs uniform method signatures across implementations).

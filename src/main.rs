@@ -5,12 +5,15 @@ use std::sync::{Arc, Mutex};
 use taskflow::handlers::{
     AppState, create_task, get_task, set_priority, set_project_id, set_status, tasks,
 };
+use taskflow::repository::InMemoryTaskRepository;
 
 #[tokio::main]
 async fn main() {
-    let state = Arc::new(AppState {
-        tasks: Mutex::new(HashMap::new()),
-    });
+    let state = AppState {
+        repository: Arc::new(InMemoryTaskRepository {
+            memory: Mutex::new(HashMap::new()),
+        }),
+    };
 
     let app = Router::new()
         .route("/", get(|| async { "server running..." }))
