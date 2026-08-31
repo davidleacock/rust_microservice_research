@@ -93,10 +93,31 @@ impl TaskRepository for PostgresTaskRepository {
         task_id: TaskId,
         priority: Priority,
     ) -> Result<Option<Task>, RepositoryError> {
+        let query: Option<TaskDto> = query_as!(
+            TaskDto,
+            "UPDATE tasks SET priority = $1 WHERE task_id = $2 RETURNING *",
+            priority.to_string(),
+            task_id.0,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| RepositoryError::GeneralError {
+            message: e.to_string(),
+        })?;
 
-
-
-        todo!()
+        match query {
+            None => Ok(None),
+            Some(dto) => {
+                let task = Task::from_dto(
+                    dto.task_id,
+                    dto.title,
+                    dto.priority,
+                    dto.status,
+                    dto.project_id,
+                );
+                Ok(Some(task))
+            }
+        }
     }
 
     async fn set_status(
@@ -104,7 +125,31 @@ impl TaskRepository for PostgresTaskRepository {
         task_id: TaskId,
         status: Status,
     ) -> Result<Option<Task>, RepositoryError> {
-        todo!()
+        let query: Option<TaskDto> = query_as!(
+            TaskDto,
+            "UPDATE tasks SET status = $1 WHERE task_id = $2 RETURNING *",
+            status.to_string(),
+            task_id.0,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| RepositoryError::GeneralError {
+            message: e.to_string(),
+        })?;
+
+        match query {
+            None => Ok(None),
+            Some(dto) => {
+                let task = Task::from_dto(
+                    dto.task_id,
+                    dto.title,
+                    dto.priority,
+                    dto.status,
+                    dto.project_id,
+                );
+                Ok(Some(task))
+            }
+        }
     }
 
     async fn set_project_id(
@@ -112,6 +157,30 @@ impl TaskRepository for PostgresTaskRepository {
         task_id: TaskId,
         project_id: ProjectId,
     ) -> Result<Option<Task>, RepositoryError> {
-        todo!()
+        let query: Option<TaskDto> = query_as!(
+            TaskDto,
+            "UPDATE tasks SET project_id = $1 WHERE task_id = $2 RETURNING *",
+            project_id.0,
+            task_id.0,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| RepositoryError::GeneralError {
+            message: e.to_string(),
+        })?;
+
+        match query {
+            None => Ok(None),
+            Some(dto) => {
+                let task = Task::from_dto(
+                    dto.task_id,
+                    dto.title,
+                    dto.priority,
+                    dto.status,
+                    dto.project_id,
+                );
+                Ok(Some(task))
+            }
+        }
     }
 }
