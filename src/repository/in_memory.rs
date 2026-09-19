@@ -51,11 +51,7 @@ impl TaskRepository for InMemoryTaskRepository {
         Ok(id)
     }
 
-    async fn set_priority(
-        &self,
-        task_id: TaskId,
-        priority: Priority,
-    ) -> Result<Option<Task>, RepositoryError> {
+    async fn update_task(&self, task: &Task) -> Result<(), RepositoryError> {
         let mut tasks = self
             .memory
             .lock()
@@ -63,54 +59,10 @@ impl TaskRepository for InMemoryTaskRepository {
                 message: "in-memory repo failed".to_string(),
             })?;
 
-        Ok(if let Some(task) = tasks.get_mut(&task_id) {
-            task.set_priority(priority);
-            Some(task.clone())
-        } else {
-            None
-        })
-    }
+        if let Some(old_task) = tasks.get_mut(&task.task_id()) {
+            *old_task = task.clone();
+        }
 
-    async fn set_status(
-        &self,
-        task_id: TaskId,
-        status: Status,
-    ) -> Result<Option<Task>, RepositoryError> {
-        let mut tasks = self
-            .memory
-            .lock()
-            .map_err(|_| RepositoryError::GeneralError {
-                message: "in-memory repo failed".to_string(),
-            })?;
-
-        Ok(if let Some(task) = tasks.get_mut(&task_id) {
-            task.set_status(status)
-                .map_err(|_| RepositoryError::GeneralError {
-                    message: "in-memory repo failed".to_string(),
-                })?;
-            Some(task.clone())
-        } else {
-            None
-        })
-    }
-
-    async fn set_project_id(
-        &self,
-        task_id: TaskId,
-        project_id: ProjectId,
-    ) -> Result<Option<Task>, RepositoryError> {
-        let mut tasks = self
-            .memory
-            .lock()
-            .map_err(|_| RepositoryError::GeneralError {
-                message: "in-memory repo failed".to_string(),
-            })?;
-
-        Ok(if let Some(task) = tasks.get_mut(&task_id) {
-            task.set_project_id(project_id);
-            Some(task.clone())
-        } else {
-            None
-        })
+        Ok(())
     }
 }

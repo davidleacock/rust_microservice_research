@@ -1,5 +1,6 @@
 use crate::domain::{Priority, ProjectId, Status, Task, TaskError, TaskId};
 use crate::repository::TaskRepository;
+use crate::task_service::TaskService;
 use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
@@ -8,7 +9,7 @@ use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct AppState {
-    pub repository: Arc<dyn TaskRepository>,
+    pub service: TaskService,
 }
 
 #[derive(Deserialize)]
@@ -39,7 +40,7 @@ pub async fn create_task(
     match Task::new(body.title, body.priority) {
         Ok(task) => {
             let result = state
-                .repository
+                .service
                 .create_task(task)
                 .await
                 .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -55,7 +56,7 @@ pub async fn create_task(
 
 pub async fn tasks(state: State<AppState>) -> Result<Json<Vec<Task>>, StatusCode> {
     let tasks: Vec<Task> = state
-        .repository
+        .service
         .get_tasks()
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -67,7 +68,7 @@ pub async fn get_task(
     Path(task_id): Path<TaskId>,
 ) -> Result<Json<Task>, StatusCode> {
     let result = state
-        .repository
+        .service
         .get_task(task_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -84,7 +85,7 @@ pub async fn set_priority(
     Json(body): Json<SetPriority>,
 ) -> Result<Json<Task>, StatusCode> {
     let result = state
-        .repository
+        .service
         .set_priority(task_id, body.priority)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -101,7 +102,7 @@ pub async fn set_status(
     Json(body): Json<SetStatus>,
 ) -> Result<Json<Task>, StatusCode> {
     let result = state
-        .repository
+        .service
         .set_status(task_id, body.status)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -118,7 +119,7 @@ pub async fn set_project_id(
     Json(body): Json<SetProjectId>,
 ) -> Result<Json<Task>, StatusCode> {
     let result = state
-        .repository
+        .service
         .set_project_id(task_id, body.project_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;

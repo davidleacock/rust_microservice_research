@@ -1,18 +1,20 @@
 use axum::routing::post;
-use axum::{Router, routing::get};
-use std::collections::HashMap;
+use axum::{routing::get, Router};
 use std::sync::{Arc, Mutex};
 use taskflow::handlers::{
-    AppState, create_task, get_task, set_priority, set_project_id, set_status, tasks,
+    create_task, get_task, set_priority, set_project_id, set_status, tasks, AppState,
 };
 use taskflow::repository::InMemoryTaskRepository;
+use taskflow::task_service::TaskService;
 
 #[tokio::main]
 async fn main() {
     let state = AppState {
-        repository: Arc::new(InMemoryTaskRepository {
-            memory: Mutex::new(HashMap::new()),
-        }),
+        service: TaskService {
+            repository: Arc::new(InMemoryTaskRepository {
+                memory: Mutex::new(Default::default()),
+            }),
+        },
     };
 
     let app = Router::new()

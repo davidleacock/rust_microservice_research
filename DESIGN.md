@@ -140,6 +140,79 @@ noted above (still tracked, not forgotten — just not this phase's focus).
 - [ ] `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check` clean
 - [ ] No trait method exists that the real adapter doesn't need (no speculative surface)
 
+**Mid-phase course correction (2026-08-30):** the original trait shape had field-specific
+mutators (`set_priority`, `set_status`, `set_project_id`) living directly on
+`TaskRepository`. That's wrong: it pushes business validation (`Task::set_status`'s
+`transition_to` rules) into every adapter individually rather than enforcing it once.
+Concretely, `InMemoryTaskRepository::set_status` happened to route through
+`Task::set_status` correctly, but nothing about the trait *required* that — a
+`PostgresTaskRepository::set_status` written as a raw `UPDATE tasks SET status = $1`
+would silently accept invalid transitions the in-memory adapter rejects, since it never
+touches the domain method at all. Two adapters silently disagreeing about what's a legal
+state transition is a real correctness bug, not a style issue.
+
+**Fix:** collapse `TaskRepository` down to a pure persistence port — `get_task`,
+`get_tasks`, `create_task`, `save_task(&self, task: &Task)` — no field-specific mutators.
+Business logic moves to a new `TaskService` layer (standard DDD/hexagonal "application
+service") sitting between `handlers.rs` and `TaskRepository`: it loads a `Task`, calls the
+domain's own validated methods (`set_status`, `set_priority`, ...), and persists the
+result via `save_task`. This guarantees `transition_to`'s validation runs exactly once,
+in the domain layer, regardless of which repository implementation is behind the trait —
+no adapter has a status-specific write path left to get wrong. Handlers become thin
+callers of `TaskService`, not direct callers of `TaskRepository`.
+
+**Known, deliberately deferred limitation:** load-then-save is two round trips with a
+window in between, unlike the atomic `UPDATE ... RETURNING` the old field-specific
+methods had. Two concurrent requests modifying the same task could race — the second
+`save_task` can silently overwrite what the first wrote (a "lost update"), since nothing
+currently checks that the row hasn't changed since it was loaded. Acceptable for this
+project's scope (no real concurrent traffic), but a known gap, not an oversight. Real
+fix, if revisited: optimistic concurrency via a `version` column
+(`UPDATE ... WHERE task_id = $1 AND version = $2`, treat zero rows affected as a
+conflict — the DB-row equivalent of compare-and-swap) or Postgres `SERIALIZABLE`
+isolation with app-level retry on serialization failure; the HTTP-level equivalent of
+the same idea is `ETag`/`If-Match` with `412 Precondition Failed`. Pessimistic locking
+(`SELECT ... FOR UPDATE` in a transaction) and event sourcing (Akka Persistence-style
+append-only event log, conflict detected via expected-vs-actual stream version) are the
+next tiers up if conflict frequency or auditability ever demanded it — neither is
+warranted here.
+
+**Finalized shape (2026-09-19):**
+- `TaskRepository` (pure persistence port): `get_task(id) -> Option<Task>`,
+  `get_tasks() -> Vec<Task>`, `create_task(Task) -> TaskId`,
+  `update_task(&Task) -> ()` — the last one replaces `set_priority`/`set_status`/
+  `set_project_id`, taking a whole already-validated `Task` and writing every column.
+  `get_task` and `get_tasks` stay as two separate methods rather than collapsing
+  into one — they're different queries (`WHERE task_id = $1`, indexed, vs. a full
+  table scan), and `Option<Task>` is the correct, precise type for "at most one row
+  by primary key" — collapsing it into `Vec<Task>` would both weaken that type
+  guarantee and force every single-task lookup (including every `TaskService`
+  mutator, which needs to load one task before mutating it) through a full-table
+  fetch.
+- `TaskService` (application/orchestration layer): `create_task`, `set_priority`,
+  `set_status`, `set_project_id` — each of the three setters loads via
+  `repository.get_task`, mutates via the domain's own validated method
+  (`Task::set_priority`/`set_status`/etc., so `transition_to`'s rules run exactly
+  once regardless of adapter), then persists via `repository.update_task`.
+  `create_task` included on the service (not left as a direct
+  handler → `Task::new` → `repository.create_task` call) purely for consistency —
+  handlers should always go through one seam, not sometimes the service and
+  sometimes the repository directly — even though creation itself has no existing
+  state to load/mutate.
+- No `delete`/`remove` on either layer yet — deferred deliberately, not an
+  oversight. Most of the everyday "remove a task" need is already covered by
+  `Status::Cancelled` as a terminal state (matches how Jira/Linear/Asana mostly
+  handle this in practice); true deletion is a rarer, more administrative
+  operation. When it's added, it needs its own deliberate choice between hard
+  delete (`DELETE FROM tasks`) and soft delete (a `deleted_at`/`is_deleted` column,
+  preserving the row for audit/undo — the more common production choice) rather
+  than defaulting to whichever is easiest to bolt on.
+- `TaskService` gets its own error type composing both `RepositoryError`
+  (persistence failures) and domain validation failures (`TaskError`, from
+  `transition_to`) — collapsing both into one generic service-level error would
+  reintroduce the "blanket 500 for everything" problem already fixed once at the
+  HTTP layer (a rejected transition should still map to `409`, not `500`).
+
 ## Decision Log
 
 - 2026-08-09 — Chose Axum (HTTP) before tonic (gRPC) for the API phase: closer to
