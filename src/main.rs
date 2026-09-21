@@ -1,8 +1,8 @@
 use axum::routing::post;
-use axum::{routing::get, Router};
+use axum::{Router, routing::get};
 use std::sync::{Arc, Mutex};
 use taskflow::handlers::{
-    create_task, get_task, set_priority, set_project_id, set_status, tasks, AppState,
+    AppState, create_task, get_task, set_priority, set_project_id, set_status, tasks,
 };
 use taskflow::repository::InMemoryTaskRepository;
 use taskflow::task_service::TaskService;

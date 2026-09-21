@@ -17,9 +17,5 @@ pub trait TaskRepository: Send + Sync {
     async fn get_task(&self, task_id: TaskId) -> Result<Option<Task>, RepositoryError>;
     async fn get_tasks(&self) -> Result<Vec<Task>, RepositoryError>;
     async fn create_task(&self, task: Task) -> Result<TaskId, RepositoryError>;
-    async fn update_task(
-        &self,
-        task: &Task,
-    ) -> Result<(), RepositoryError>;
-
+    async fn update_task(&self, task: &Task) -> Result<(), RepositoryError>;
 }

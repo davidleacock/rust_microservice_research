@@ -1,6 +1,6 @@
 use crate::domain::{Priority, ProjectId, Status, Task, TaskError, TaskId};
 use crate::repository::TaskRepository;
-use crate::task_service::TaskService;
+use crate::task_service::{TaskService, TaskServiceError};
 use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
@@ -37,21 +37,17 @@ pub async fn create_task(
     state: State<AppState>,
     Json(body): Json<CreateTask>,
 ) -> Result<Json<TaskId>, StatusCode> {
-    match Task::new(body.title, body.priority) {
-        Ok(task) => {
-            let result = state
-                .service
-                .create_task(task)
-                .await
-                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let id = state
+        .service
+        .create_task(body.title, body.priority)
+        .await
+        .map_err(|e| match e {
+            TaskServiceError::DomainError { .. } => StatusCode::BAD_REQUEST,
+            TaskServiceError::RepositoryError { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+            TaskServiceError::GeneralError { .. } => StatusCode::NOT_FOUND,
+        })?;
 
-            Ok(Json(result))
-        }
-        Err(error) => match error {
-            TaskError::TitleMissing => Err(StatusCode::BAD_REQUEST),
-            TaskError::InvalidStatusChange { .. } => Err(StatusCode::METHOD_NOT_ALLOWED),
-        },
-    }
+    Ok(Json(id))
 }
 
 pub async fn tasks(state: State<AppState>) -> Result<Json<Vec<Task>>, StatusCode> {
@@ -67,16 +63,12 @@ pub async fn get_task(
     state: State<AppState>,
     Path(task_id): Path<TaskId>,
 ) -> Result<Json<Task>, StatusCode> {
-    let result = state
-        .service
-        .get_task(task_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let task = state.service.get_task(task_id).await.map_err(|e| match e {
+        TaskServiceError::RepositoryError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        _ => StatusCode::NOT_FOUND,
+    })?;
 
-    match result {
-        None => Err(StatusCode::NOT_FOUND),
-        Some(task) => Ok(Json(task)),
-    }
+    Ok(Json(task))
 }
 
 pub async fn set_priority(
@@ -88,7 +80,10 @@ pub async fn set_priority(
         .service
         .set_priority(task_id, body.priority)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| match e {
+            TaskServiceError::RepositoryError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            _ => StatusCode::NOT_FOUND,
+        })?;
 
     match result {
         None => Err(StatusCode::NOT_FOUND),
@@ -105,7 +100,10 @@ pub async fn set_status(
         .service
         .set_status(task_id, body.status)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| match e {
+            TaskServiceError::RepositoryError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            _ => StatusCode::NOT_FOUND,
+        })?;
 
     match result {
         None => Err(StatusCode::NOT_FOUND),
@@ -122,7 +120,10 @@ pub async fn set_project_id(
         .service
         .set_project_id(task_id, body.project_id)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| match e {
+            TaskServiceError::RepositoryError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            _ => StatusCode::NOT_FOUND,
+        })?;
 
     match result {
         None => Err(StatusCode::NOT_FOUND),
