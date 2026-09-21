@@ -10,7 +10,7 @@ use taskflow::task_service::TaskService;
 #[tokio::main]
 async fn main() {
     let state = AppState {
-        service: TaskService {
+        task_service: TaskService {
             repository: Arc::new(InMemoryTaskRepository {
                 memory: Mutex::new(Default::default()),
             }),

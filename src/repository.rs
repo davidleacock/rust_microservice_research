@@ -1,7 +1,7 @@
 mod in_memory;
 mod postgres;
 
-use crate::domain::{Priority, ProjectId, Status, Task, TaskId};
+use crate::domain::{Task, TaskId};
 use async_trait::async_trait;
 
 pub use in_memory::InMemoryTaskRepository;

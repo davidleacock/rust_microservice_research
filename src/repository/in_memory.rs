@@ -1,4 +1,4 @@
-use crate::domain::{Priority, ProjectId, Status, Task, TaskId};
+use crate::domain::{Task, TaskId};
 use crate::repository::{RepositoryError, TaskRepository};
 use async_trait::async_trait;
 use std::collections::HashMap;

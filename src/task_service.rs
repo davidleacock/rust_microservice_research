@@ -1,7 +1,5 @@
 use crate::domain::{Priority, ProjectId, Status, Task, TaskId};
 use crate::repository::TaskRepository;
-use crate::task_service::TaskServiceError::DomainError;
-use std::os::macos::raw::stat;
 use std::sync::Arc;
 
 #[derive(Debug, thiserror::Error)]

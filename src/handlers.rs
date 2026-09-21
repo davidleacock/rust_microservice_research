@@ -1,15 +1,13 @@
-use crate::domain::{Priority, ProjectId, Status, Task, TaskError, TaskId};
-use crate::repository::TaskRepository;
+use crate::domain::{Priority, ProjectId, Status, Task, TaskId};
 use crate::task_service::{TaskService, TaskServiceError};
 use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use serde::Deserialize;
-use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct AppState {
-    pub service: TaskService,
+    pub task_service: TaskService,
 }
 
 #[derive(Deserialize)]
@@ -38,7 +36,7 @@ pub async fn create_task(
     Json(body): Json<CreateTask>,
 ) -> Result<Json<TaskId>, StatusCode> {
     let id = state
-        .service
+        .task_service
         .create_task(body.title, body.priority)
         .await
         .map_err(|e| match e {
@@ -52,7 +50,7 @@ pub async fn create_task(
 
 pub async fn tasks(state: State<AppState>) -> Result<Json<Vec<Task>>, StatusCode> {
     let tasks: Vec<Task> = state
-        .service
+        .task_service
         .get_tasks()
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -63,7 +61,7 @@ pub async fn get_task(
     state: State<AppState>,
     Path(task_id): Path<TaskId>,
 ) -> Result<Json<Task>, StatusCode> {
-    let task = state.service.get_task(task_id).await.map_err(|e| match e {
+    let task = state.task_service.get_task(task_id).await.map_err(|e| match e {
         TaskServiceError::RepositoryError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         _ => StatusCode::NOT_FOUND,
     })?;
@@ -77,7 +75,7 @@ pub async fn set_priority(
     Json(body): Json<SetPriority>,
 ) -> Result<Json<Task>, StatusCode> {
     let result = state
-        .service
+        .task_service
         .set_priority(task_id, body.priority)
         .await
         .map_err(|e| match e {
@@ -97,7 +95,7 @@ pub async fn set_status(
     Json(body): Json<SetStatus>,
 ) -> Result<Json<Task>, StatusCode> {
     let result = state
-        .service
+        .task_service
         .set_status(task_id, body.status)
         .await
         .map_err(|e| match e {
@@ -117,7 +115,7 @@ pub async fn set_project_id(
     Json(body): Json<SetProjectId>,
 ) -> Result<Json<Task>, StatusCode> {
     let result = state
-        .service
+        .task_service
         .set_project_id(task_id, body.project_id)
         .await
         .map_err(|e| match e {
