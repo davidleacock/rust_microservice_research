@@ -61,10 +61,14 @@ pub async fn get_task(
     state: State<AppState>,
     Path(task_id): Path<TaskId>,
 ) -> Result<Json<Task>, StatusCode> {
-    let task = state.task_service.get_task(task_id).await.map_err(|e| match e {
-        TaskServiceError::RepositoryError(_) => StatusCode::INTERNAL_SERVER_ERROR,
-        _ => StatusCode::NOT_FOUND,
-    })?;
+    let task = state
+        .task_service
+        .get_task(task_id)
+        .await
+        .map_err(|e| match e {
+            TaskServiceError::RepositoryError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            _ => StatusCode::NOT_FOUND,
+        })?;
 
     Ok(Json(task))
 }
@@ -99,8 +103,9 @@ pub async fn set_status(
         .set_status(task_id, body.status)
         .await
         .map_err(|e| match e {
+            TaskServiceError::DomainError(_) => StatusCode::BAD_REQUEST,
             TaskServiceError::RepositoryError(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            _ => StatusCode::NOT_FOUND,
+            TaskServiceError::GeneralError { .. } => StatusCode::NOT_FOUND,
         })?;
 
     match result {

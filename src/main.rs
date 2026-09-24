@@ -1,21 +1,34 @@
 use axum::routing::post;
 use axum::{Router, routing::get};
-use std::sync::{Arc, Mutex};
+use sqlx::PgPool;
+use std::sync::Arc;
 use taskflow::handlers::{
     AppState, create_task, get_task, set_priority, set_project_id, set_status, tasks,
 };
-use taskflow::repository::InMemoryTaskRepository;
+use taskflow::repository::PostgresTaskRepository;
 use taskflow::task_service::TaskService;
 
 #[tokio::main]
 async fn main() {
+    let conn_url =
+        std::env::var("DATABASE_URL").expect("Env var DATABASE_URL is required for this example.");
+    let pool = PgPool::connect(&conn_url)
+        .await
+        .expect("unable to connect to postgres");
+
     let state = AppState {
         task_service: TaskService {
-            repository: Arc::new(InMemoryTaskRepository {
-                memory: Mutex::new(Default::default()),
-            }),
+            repository: Arc::new(PostgresTaskRepository { pool }),
         },
     };
+
+    // let state = AppState {
+    //     task_service: TaskService {
+    //         repository: Arc::new(InMemoryTaskRepository {
+    //             memory: Mutex::new(Default::default()),
+    //         }),
+    //     },
+    // };
 
     let app = Router::new()
         .route("/", get(|| async { "server running..." }))

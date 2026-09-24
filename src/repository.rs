@@ -5,6 +5,7 @@ use crate::domain::{Task, TaskId};
 use async_trait::async_trait;
 
 pub use in_memory::InMemoryTaskRepository;
+pub use postgres::PostgresTaskRepository;
 
 #[derive(Debug, thiserror::Error)]
 pub enum RepositoryError {
